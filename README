@@ -1,0 +1,3 @@
+Currently contains libraries for Windows on both 64-bit and 32-bit architectures.
+
+Add at least jogl.all.jar and gluegen.jar to your classpath or to your user library.
