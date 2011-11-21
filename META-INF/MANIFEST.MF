@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Class-Path: . lib/jig.jar lib/ogg-spi/jogg-0.0.7.jar lib/ogg-spi/jorbi
+ s-0.0.15.jar lib/ogg-spi/tritonus_jorbis-0.3.6.jar lib/spi/tritonus_s
+ hare.jar lib/lwjgl/jar/lwjgl_test.jar lib/lwjgl/jar/lwjgl_util_applet
+ .jar lib/lwjgl/jar/lwjgl_util.jar lib/lwjgl/jar/lwjgl.jar lib/lwjgl/j
+ ar/jinput.jar resources
+Main-Class: planetDefense.PlanetDefense
+
+
