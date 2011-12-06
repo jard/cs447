@@ -7,10 +7,18 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.nio.DoubleBuffer;
 import java.util.EventListener;
 import java.util.Vector;
 
+import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
+
+import com.jogamp.common.nio.Buffers;
+
+import planetDefense.geometry.Matrix;
+import planetDefense.geometry.Quaternion;
+import planetDefense.geometry.Vector3d;
 
 /**
  * @author Justin
@@ -18,16 +26,16 @@ import javax.media.opengl.GL2;
  */
 public class UserShip extends GameObject implements KeyListener, MouseListener{
 	
-	private static final double MAX_SPEED = 2.0f;
-	private static final double ROTATE_DELTA = 0.05;
-	private static final double ACCELERATION = 0.3;
+	private static final double MAX_SPEED = 0.5f;
+	private static final double ROTATE_DELTA = Math.PI/100;
+	private static final double ACCELERATION = 0.01;
 	
 	private static final double[] START_POS = {0, 0, 500};
 
     private final float[] materialAmbient = {0.6f, 0.6f, 1.0f, 1.0f};
     private final float[] materialDiffuse = {0.2f, 0.2f, 0.3f, 1.0f};
-    private final float[] materialSpecular = {0.2f, 0.2f, 0.2f, 1.0f};
-	private final float[] materialShininess = {20.0f};
+    private final float[] materialSpecular = {1.0f, 1.0f, 1.0f, 1.0f};
+	private final float[] materialShininess = {80.0f};
 
 	private boolean leftKeyPressed;
 	private boolean rightKeyPressed;
@@ -35,25 +43,104 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	private boolean downKeyPressed;
 	private boolean thrust;
 	
+	private Quaternion rotation;
+	private boolean cwKeyPressed;
+	private boolean ccwKeyPressed;
+	private int[] vertexBufferObjects;
+	
 	public UserShip(GL2 gl){
 		initializeVectors();
 		createVertices();
 		createNormals();
-		// set material properties	
-		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_AMBIENT, materialAmbient, 0);
-		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_DIFFUSE, materialDiffuse, 0);
-		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_SPECULAR, materialSpecular, 0);
-		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_SHININESS, materialShininess, 0);
+		loadVBOs(gl);
+		rotation = new Quaternion(1, 0, 0, 0);
+	}
+
+	/**
+	 * 
+	 */
+	private void loadVBOs(GL2 gl) {
+		vertexBufferObjects = new int[3];
+		gl.glGenBuffers(3, vertexBufferObjects, 0);
+		
+		
+		// load vertices
+		double verts[] = new double[14*3];
+		// first seven vertices make the forward triangle fan
+		for(int i = 0; i < 6; ++i){
+			verts[i*3] = vertices[i].getX();
+			verts[i*3+1] = vertices[i].getY();
+			verts[i*3+2] = vertices[i].getZ();
+		}
+		verts[6*3] = vertices[1].getX();
+		verts[6*3+1] = vertices[1].getY();
+		verts[6*3+2] = vertices[1].getZ();		
+		
+		// next seven vertices make the rear triangle fan
+		verts[7*3] = vertices[6].getX();
+		verts[7*3+1] = vertices[6].getY();
+		verts[7*3+2] = vertices[6].getZ();
+		for(int i = 1; i < 6; ++i){
+			verts[(8+i)*3] = vertices[i].getX();
+			verts[(8+i)*3+1] = vertices[i].getY();
+			verts[(8+i)*3+2] = vertices[i].getZ();
+		}
+		verts[13*3] = vertices[1].getX();
+		verts[13*3+1] = vertices[1].getY();
+		verts[13*3+2] = vertices[1].getZ();
+		
+		// load into buffer		
+		DoubleBuffer vertBuff = DoubleBuffer.allocate(verts.length);
+		vertBuff.put(verts);
+		vertBuff.rewind();
+		gl.glBindBuffer(GL.GL_ARRAY_BUFFER, vertexBufferObjects[0]); // bind vertex buffer
+		gl.glBufferData(GL.GL_ARRAY_BUFFER, verts.length*Buffers.SIZEOF_DOUBLE, vertBuff, GL.GL_STATIC_DRAW);
+		
+		
+		// load normals
+		double norms[] = new double[verts.length];
+		// first seven normals make the forward triangle fan
+		for(int i = 0; i < 6; ++i){
+			norms[i*3] = vertexNormals[i].getX();
+			norms[i*3+1] = vertexNormals[i].getY();
+			norms[i*3+2] = vertexNormals[i].getZ();
+		}
+		norms[6*3] = vertexNormals[1].getX();
+		norms[6*3+1] = vertexNormals[1].getY();
+		norms[6*3+2] = vertexNormals[1].getZ();
+		
+		
+		// next seven normals make the rear triangle fan
+		norms[7*3] = vertexNormals[6].getX();
+		norms[7*3+1] = vertexNormals[6].getY();
+		norms[7*3+2] = vertexNormals[6].getZ();
+		for(int i = 1; i < 6; ++i){
+			norms[(8+i)*3] = vertexNormals[i].getX();
+			norms[(8+i)*3+1] = vertexNormals[i].getY();
+			norms[(8+i)*3+2] = vertexNormals[i].getZ();
+		}
+		norms[13*3] = vertexNormals[1].getX();
+		norms[13*3+1] = vertexNormals[1].getY();
+		norms[13*3+2] = vertexNormals[1].getZ();
+		// load into buffer		
+		DoubleBuffer normBuff = DoubleBuffer.allocate(norms.length);
+		normBuff.put(norms);
+		normBuff.rewind();
+		gl.glBindBuffer(GL.GL_ARRAY_BUFFER, vertexBufferObjects[1]); // bind vertex buffer
+		gl.glBufferData(GL.GL_ARRAY_BUFFER, norms.length*Buffers.SIZEOF_DOUBLE, normBuff, GL.GL_STATIC_DRAW);
+		
+
+		
 	}
 
 	/**
 	 * 
 	 */
 	private void initializeVectors() {
-		rollAxis = new double[]{0, 0, -1}; // forward (doubles as direction vector)
-		pitchAxis = new double[]{1, 0, 0}; // left
-		yawAxis = new double[]{0, 1, 0}; // up
-		position = new double[]{START_POS[0], START_POS[1], START_POS[2]};
+		rollAxis = new Vector3d(0, 0, 1); // forward (doubles as direction vector)
+		pitchAxis = new Vector3d(1, 0, 0); // left
+		yawAxis = new Vector3d(0, 1, 0); // up
+		position = new Vector3d(START_POS[0], START_POS[1], START_POS[2]);
 	}
 
 	/**
@@ -61,14 +148,13 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	 */
 	private void createNormals() {
 		//Forward Triangle Fan (Nose of Ship)
-		vertexNormals = new double[7][3];
-		// initialize all normals to (0, 0, 0)
+		vertexNormals = new Vector3d[7];
+
+		// initialize all vertex normals to (0, 0, 0)
 		for(int i = 0; i < vertexNormals.length; ++i){
-			for(int j = 0; j < 3; ++j){
-				vertexNormals[i][j] = 0;
-			}
+			vertexNormals[i] = new Vector3d(0, 0, 0);
 		}		
-		faceNormals = new double[10][3];
+		faceNormals = new Vector3d[10];
 		
 		// calculate a normal for each face
 		// (0, 1, 2)
@@ -81,13 +167,9 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 			int b = i+1;
 			int c = i+2;
 			if(c == 6)c=1;
-			double[] faceNorm = faceNormal(vertices[a], vertices[b], vertices[c]); 
+			Vector3d faceNorm = faceNormal(vertices[a], vertices[b], vertices[c]); 
 			faceNormals[i] = faceNorm;
-			for(int j = 0; j < 3; ++j){
-				vertexNormals[a][j] = faceNorm[j]+vertexNormals[a][j];
-				vertexNormals[b][j] = faceNorm[j]+vertexNormals[b][j];
-				vertexNormals[c][j] = faceNorm[j]+vertexNormals[c][j];
-			}
+			vertexNormals[i] = Vector3d.add(vertexNormals[i], faceNorm);
 		}
 		
 		//Rear Triangle Fan (Tail of Ship)
@@ -102,18 +184,14 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 			int b = i+1;
 			int c = i+2;
 			if(c == 6)c=1;
-			double[] faceNorm = this.faceNormal(vertices[a], vertices[b], vertices[c]);
+			Vector3d faceNorm = this.faceNormal(vertices[a], vertices[b], vertices[c]);
 			faceNormals[5+i] = faceNorm;
 			// add adjacent faceNormals to the vertexNormals;
-			for(int j = 0; j < 3; ++j){
-				vertexNormals[a][j] = faceNorm[j]+vertexNormals[a][j];
-				vertexNormals[b][j] = faceNorm[j]+vertexNormals[b][j];
-				vertexNormals[c][j] = faceNorm[j]+vertexNormals[c][j];
-			}
+			vertexNormals[i] = Vector3d.add(vertexNormals[i], faceNorm);
 		}
 		// normalize all the vertexNormals
 		for(int i = 0; i < vertexNormals.length; ++i){
-			vertexNormals[i] = normalize(vertexNormals[i]);
+			vertexNormals[i] = Vector3d.normalize(vertexNormals[i]);
 		}
 		
 	}
@@ -122,15 +200,14 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	 * 
 	 */
 	private void createVertices() {
-		vertices = new double[7][];
-		vertices = new double[7][];
-		vertices[0] = new double[]{0, 0, -1.0};	//.add(new Float(0));
-		vertices[1] = new double[]{-.4, 0, 0};
-		vertices[2] = new double[]{0, .2, 0};
-		vertices[3] = new double[]{.4, 0, 0};
-		vertices[4] = new double[]{.2, -.1, 0};
-		vertices[5] = new double[]{-.2, -.1, 0};
-		vertices[6] = new double[]{0, 0, .2};		
+		vertices = new Vector3d[7];
+		vertices[0] = new Vector3d(0, 0, -1.0);	//.add(new Float(0));
+		vertices[1] = new Vector3d(-.4, 0, 0);
+		vertices[2] = new Vector3d(0, .1, 0);
+		vertices[3] = new Vector3d(.4, 0, 0);
+		vertices[4] = new Vector3d(.2, -.05, 0);
+		vertices[5] = new Vector3d(-.2, -.05, 0);
+		vertices[6] = new Vector3d(0, 0, .2);		
 	}
 
 	/* (non-Javadoc)
@@ -145,7 +222,9 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	 */
 	@Override
 	public void mousePressed(MouseEvent e) {
-		thrust = true;
+		if(e.getButton() == MouseEvent.BUTTON1){
+			thrust = true;
+		}
 	}
 
 	/* (non-Javadoc)
@@ -153,7 +232,9 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	 */
 	@Override
 	public void mouseReleased(MouseEvent e) {
-		thrust = false;
+		if(e.getButton() == MouseEvent.BUTTON1){
+			thrust = false;
+		}
 	}
 
 	/* (non-Javadoc)
@@ -199,11 +280,18 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 		case(KeyEvent.VK_D):
 			rightKeyPressed = isPressed;
 			break;
-//		case(KeyEvent.VK_W):
-//			upKeyPressed = isPressed;
-//			break;
-//		case(KeyEvent.VK_S):
-//			downKeyPressed = isPressed;			
+		case(KeyEvent.VK_W):
+			upKeyPressed = isPressed;
+			break;
+		case(KeyEvent.VK_S):
+			downKeyPressed = isPressed;
+			break;
+		case(KeyEvent.VK_Q):
+			ccwKeyPressed = isPressed;
+			break;
+		case(KeyEvent.VK_E):
+			cwKeyPressed = isPressed;
+			break;
 		}
 	}
 
@@ -216,7 +304,7 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	}
 
 	public void update(long delta){
-		if(leftKeyPressed || rightKeyPressed || upKeyPressed || downKeyPressed){
+		if(leftKeyPressed || rightKeyPressed || upKeyPressed || downKeyPressed || cwKeyPressed || ccwKeyPressed){
 			rotateShip(delta);
 		}
 		if(thrust){
@@ -227,9 +315,10 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 		} else {
 			speed = 0;
 		}
-		for(int i = 0; i < 3; ++i){
-			position[i] += rollAxis[i]*speed;
-		}
+		position = Vector3d.add(position, Vector3d.scale(-speed, rollAxis));
+//		for(int i = 0; i < 3; ++i){
+//			position[i] += rollAxis[i]*speed;
+//		}
 
 		
 	}
@@ -253,6 +342,11 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 			// rotate down
 			pitch(-ROTATE_DELTA);
 		}
+		if(cwKeyPressed){
+			roll(-ROTATE_DELTA);
+		} else if(ccwKeyPressed){
+			roll(ROTATE_DELTA);
+		}
 	}
 
 
@@ -261,51 +355,66 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 	 */
 	private void pitch(double radians) {
 		// rotate other two orientation axes about the pitch axis
-		double[][] rotate = rotate(radians, pitchAxis);
-		rollAxis = normalize(matrixMultiply(rotate, rollAxis)); 
-		yawAxis = normalize(matrixMultiply(rotate, yawAxis));
-		rotateX += radians;
+		Matrix rotationMatrix = rotate(radians, pitchAxis);
+		rollAxis = Vector3d.normalize(rotationMatrix.multiply(rollAxis)); 
+		yawAxis = Vector3d.normalize(rotationMatrix.multiply(yawAxis));
+		rotation = rotation.rotate(radians, pitchAxis);
+//		rotateX += radians;
 //		appendRotationMatrix(rotate);
 	}
 	
-	private void roll(double rotateDelta){
+	private void roll(double radians){
 		// rotate other two orientation axes about the roll axis
-		double[][] rotate = rotate(rotateDelta, rollAxis);
-		yawAxis = matrixMultiply(rotate, yawAxis);
-		pitchAxis = matrixMultiply(rotate, pitchAxis);
+		Matrix rotationMatrix = rotate(radians, rollAxis);
+		pitchAxis = Vector3d.normalize(rotationMatrix.multiply(pitchAxis)); 
+		yawAxis = Vector3d.normalize(rotationMatrix.multiply(yawAxis));
+		rotation = rotation.rotate(radians, rollAxis);
 //		appendRotationMatrix(rotate);
 	}
 	
 	private void yaw(double radians) {
 		// rotate other two orientation axes about the yaw axis
-		double[][] rotate = rotate(radians, yawAxis);
-		rollAxis = matrixMultiply(rotate, rollAxis);
-		pitchAxis = matrixMultiply(rotate, pitchAxis);
-		rotateY += radians;
+		Matrix rotationMatrix = rotate(radians, yawAxis);
+		rollAxis = Vector3d.normalize(rotationMatrix.multiply(rollAxis)); 
+		pitchAxis = Vector3d.normalize(rotationMatrix.multiply(pitchAxis));
+		rotation = rotation.rotate(radians, yawAxis);
+//		rotateY += radians;
 //		appendRotationMatrix(rotate);
 	}
 	
+
 	/**
-	 * @param rotate
+	 * @param radians
 	 */
-	private void appendRotationMatrix(double[][] rotate) {
-		double[][] newMatrix = new double[4][4];
-		
-		for(int i = 0; i < 4; ++i){
-			for(int j = 0; j < 4; ++j){
-				double sum = 0;
-				for(int k = 0; k < 4; ++k){
-					sum += rotate[k][i]*rotationMatrix[j][k];
-				}
-				newMatrix[j][i] = sum;
-			}
-		}
-		rotationMatrix = newMatrix;
-	}
+//	private void pitch(double degrees) {
+//		// rotate other two orientation axes about the pitch axis
+//		rotation = rotation.rotate(degrees, pitchAxis);				
+//		rollAxis = rotation.rotateVector(rollAxis); 
+//		yawAxis = rotation.rotateVector(yawAxis);
+//	}
+//	
+//	private void roll(double degrees){
+//		// rotate other two orientation axes about the roll axis
+//		rotation = rotation.rotate(degrees, rollAxis);				
+//		pitchAxis = rotation.rotateVector(pitchAxis); 
+//		yawAxis = rotation.rotateVector(yawAxis);
+//	}
+//	
+//	private void yaw(double degrees) {
+//		// rotate other two orientation axes about the yaw axis
+//		rotation = rotation.rotate(degrees, yawAxis);				
+//		rollAxis = rotation.rotateVector(rollAxis); 
+//		pitchAxis = rotation.rotateVector(pitchAxis);
+//	}
+	
+	
+	
+	
+	
+	
 
 
-
-	private double[][] rotate(double radians, double[] rotationVector){
+	private Matrix rotate(double radians, Vector3d rotationVector){
 		
 		// using quaternions
 //		double q0 = Math.cos(radians/2);
@@ -322,9 +431,9 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 		// using euler angles
 		double c = Math.cos(radians);
 		double s = Math.sin(radians);
-		double u = rotationVector[0];
-		double v = rotationVector[1];
-		double w = rotationVector[2];
+		double u = rotationVector.getX();
+		double v = rotationVector.getY();
+		double w = rotationVector.getZ();
 		double[][] matrix = {
 			// row 1
 			{u*u*(1-c)+c,
@@ -344,163 +453,151 @@ public class UserShip extends GameObject implements KeyListener, MouseListener{
 			// row 4
 			{0, 0, 0, 1}
 		};
-		return matrix;
-	}
-
-
-
-	/**
-	 * @param q	- a 4x4 transformation vector
-	 * @param v - a 3d vector
-	 * @return - resulting vector of v transformed by q
-	 */
-	private double[] matrixMultiply(double[][] q, double[] v) {
-		double[] returnV = new double[4];
-		double[] pad = {v[0], v[1], v[2], 1};
+		Matrix m = new Matrix(4, 4);
 		for(int i = 0; i < 4; ++i){
-			double sum = 0.0f;
 			for(int j = 0; j < 4; ++j){
-				sum += q[i][j]*pad[j];
+				m.set(i, j, matrix[i][j]);
 			}
-			returnV[i] = sum;
 		}
-		double[] trim = {returnV[0], returnV[1], returnV[2]};
-		return trim;
+		return m;
 	}
+
 
 
 
 	public void display(GL2 gl){
+//		gl.glMatrixMode(GL2.GL_MODELVIEW);
+//		gl.glLoadIdentity();
+		// set material properties	
+		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_AMBIENT, materialAmbient, 0);
+		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_DIFFUSE, materialDiffuse, 0);
+		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_SPECULAR, materialSpecular, 0);
+		gl.glMaterialfv(GL2.GL_FRONT_AND_BACK, GL2.GL_SHININESS, materialShininess, 0);
 		gl.glPushMatrix();
-		gl.glTranslated(position[0], position[1], position[2]);
-		gl.glRotated(rotateY*180/Math.PI, yawAxis[0], yawAxis[1], yawAxis[2]);
-//		gl.glRotated(rotateX*180/Math.PI, pitchAxis[0], pitchAxis[1], pitchAxis[2]);
-//		rotateY(gl);
-//		rotateX(gl);
-//		double[] forward = {0, 0, -1};
-//		double angle = Math.acos(dot(forward, rollAxis))*180/Math.PI;
-//		double[] axis = cross(forward, rollAxis);
 
-//		gl.glRotated(angle, axis[0], axis[1], axis[2]);
-
-//		double[] glRotationMatrix = currentRotationMatrix();
-//		gl.glMultMatrixd(glRotationMatrix, 0);
-
-
+//		gl.glTranslated(position.getX(), position.getY(), position.getZ());
+		gl.glMultMatrixd(currentTransformationMatrix(), 0);
+//		gl.glScaled(2.0, 2.0, 2.0);
+		
 		gl.glBegin(GL2.GL_TRIANGLE_FAN);
 		int a,b,c;
 		a = 0;
-//		gl.glNormal3d(vertexNormals[a][0], vertexNormals[a][1], vertexNormals[a][2]);
-		gl.glNormal3d(faceNormals [0][0], faceNormals[0][1], faceNormals[0][2]);
-//		gl.glVertex3d(vertices[a][0], vertices[a][1], vertices[a][2]);
+
+		gl.glNormal3d(faceNormals[0].getX(), faceNormals[0].getY(), faceNormals[0].getZ());
+
 		for(int i = 0; i < 7; ++i){
 			b = i;
 			if(b == 6) b=1;
-//			gl.glNormal3d(vertexNormals[b][0], vertexNormals[b][1], vertexNormals[b][2]);
 			if(i>1){
-				gl.glNormal3d(faceNormals [i-2][0], faceNormals[i-2][1], faceNormals[i-2][2]);
+				gl.glNormal3d(faceNormals [i-2].getX(), faceNormals[i-2].getY(), faceNormals[i-2].getZ());
 			}
-			gl.glVertex3d(vertices[b][0], vertices[b][1], vertices[b][2]);
+			gl.glVertex3d(vertices[b].getX(), vertices[b].getY(), vertices[b].getZ());
 
 		}
 		gl.glEnd();
 		gl.glBegin(GL2.GL_TRIANGLE_FAN);
 		a = 6;
-//		gl.glNormal3d(vertexNormals[a][0], vertexNormals[a][1], vertexNormals[a][2]);
-		gl.glNormal3d(-faceNormals[5][0], -faceNormals[5][1], -faceNormals[5][2]);
-		gl.glVertex3d(vertices[a][0], vertices[a][1], vertices[a][2]);
+		gl.glNormal3d(-faceNormals[5].getX(), -faceNormals[5].getY(), -faceNormals[5].getZ());
+		gl.glVertex3d(vertices[a].getX(), vertices[a].getY(), vertices[a].getZ());
 		for(int i = 1; i < 7; ++i){
 			b = i;
 			if(b == 6) b=1;
-//			gl.glNormal3d(vertexNormals[b][0], vertexNormals[b][1], vertexNormals[b][2]);
 			if(i>1){
-				gl.glNormal3d(-faceNormals[5+i-2][0], -faceNormals[5+i-2][1], -faceNormals[5+i-2][2]);
+				gl.glNormal3d(-faceNormals[5+i-2].getX(), -faceNormals[5+i-2].getY(), -faceNormals[5+i-2].getZ());
 			}
-			gl.glVertex3d(vertices[b][0], vertices[b][1], vertices[b][2]);
+			gl.glVertex3d(vertices[b].getX(), vertices[b].getY(), vertices[b].getZ());
 		}
 		gl.glEnd();
+
+		
+		// using VBOs
+//		gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
+//		gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, vertexBufferObjects[0]);
+//		gl.glVertexPointer(3, GL2.GL_DOUBLE, 0, 0);
+//
+//		// bind buffer containing normals
+//		gl.glEnableClientState(GL2.GL_NORMAL_ARRAY);
+//		gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, vertexBufferObjects[1]);
+//		gl.glNormalPointer(GL2.GL_DOUBLE, 0, 0);
+//		
+//
+//		
+//		gl.glDrawArrays(GL2.GL_TRIANGLE_FAN, 0, 7);
+//		gl.glDrawArrays(GL2.GL_TRIANGLE_FAN, 8, 7);
+		
+		drawNorms(gl);
 		gl.glPopMatrix();		
 	}
 
 
+	/**
+	 * @param gl
+	 */
+	private void drawNorms(GL2 gl) {
+		gl.glColor3f(1, 0, 0);
+		gl.glDisable(GL2.GL_LIGHTING);
+		// 0,1,2 faceNorm 0
+		drawNorm(gl, vertices[0], faceNormals[0]);
+		drawNorm(gl, vertices[1], faceNormals[0]);
+		drawNorm(gl, vertices[2], faceNormals[0]);
+		// 0,2,3 faceNorm 1
+		drawNorm(gl, vertices[0], faceNormals[1]);
+		drawNorm(gl, vertices[2], faceNormals[1]);
+		drawNorm(gl, vertices[3], faceNormals[1]);
+		// 0,3,4 faceNorm 2
+		drawNorm(gl, vertices[0], faceNormals[2]);
+		drawNorm(gl, vertices[3], faceNormals[2]);
+		drawNorm(gl, vertices[4], faceNormals[2]);
+		// 0,4,5 faceNorm 3
+		drawNorm(gl, vertices[0], faceNormals[3]);
+		drawNorm(gl, vertices[4], faceNormals[3]);
+		drawNorm(gl, vertices[5], faceNormals[3]);
+		// 0,5,1 faceNorm 4
+		drawNorm(gl, vertices[0], faceNormals[4]);
+		drawNorm(gl, vertices[5], faceNormals[4]);
+		drawNorm(gl, vertices[1], faceNormals[4]);
+		// 6,1,2 faceNorm 5
+		drawNorm(gl, vertices[6], faceNormals[5]);
+		drawNorm(gl, vertices[1], faceNormals[5]);
+		drawNorm(gl, vertices[2], faceNormals[5]);
+		// 6,2,3 faceNorm 6
+		drawNorm(gl, vertices[6], faceNormals[6]);
+		drawNorm(gl, vertices[2], faceNormals[6]);
+		drawNorm(gl, vertices[3], faceNormals[6]);
+		// 6,3,4 faceNorm 7
+		drawNorm(gl, vertices[6], faceNormals[7]);
+		drawNorm(gl, vertices[3], faceNormals[7]);
+		drawNorm(gl, vertices[4], faceNormals[7]);
+		// 6,4,5 faceNorm 8
+		drawNorm(gl, vertices[6], faceNormals[8]);
+		drawNorm(gl, vertices[4], faceNormals[8]);
+		drawNorm(gl, vertices[5], faceNormals[8]);
+		// 6,5,1 faceNorm 9
+		drawNorm(gl, vertices[6], faceNormals[9]);
+		drawNorm(gl, vertices[5], faceNormals[9]);
+		drawNorm(gl, vertices[1], faceNormals[9]);
+		
+	}
 
 	/**
-	 * Rotate about the y axis
+	 * @param vector3d
+	 * @param vector3d2
 	 */
-	private void rotateY(GL2 gl) {
-		// project current direction vector into x-z plane
-//		double v[] = rollAxis;	// current direction vector
-//		double[] n = {0, 1, 0}; // normal to the x-z plane
-//		double[] u = new double[3];
-//		double dot = dot(v, n);
-//		for(int i = 0; i < 3; ++i){
-//			u[i] = v[i] - dot*n[i];
-//		}
-//		// find angle 
-//		double[] forward = {0, 0, -1};
-//		double angle = angleBetween(u, forward);
-//		// rotate 
-//		gl.glRotated(angle, 0, 1, 0);
-		
-		double[] u = new double[]{rollAxis[0], 0, rollAxis[2]};
-		double[] v = new double[]{0, 0, -1};
-		double angle = angleBetween(u, v);
-		// rotate 
-		gl.glRotated(angle, 0, 1, 0);
-		
-		
-//		double[] axis = cross(forward, rollAxis);
-//		gl.glTranslatef(300, 0, 0);
-//		gl.glRotated(angle, axis[0], axis[1], axis[2]);
+	private void drawNorm(GL2 gl, Vector3d vertex, Vector3d norm) {
+		gl.glBegin(GL2.GL_LINES);
+		gl.glVertex3d(vertex.getX(), vertex.getY(), vertex.getZ());
+		Vector3d end = Vector3d.add(vertex, Vector3d.scale(0.1, norm));
+		gl.glVertex3d(end.getX(), end.getY(), end.getZ());
+		gl.glEnd();
 		
 	}
 
 
 
-	/**
-	 * @param gl 
-	 * 
-	 */
-	private void rotateX(GL2 gl) {
-//		// project current direction vector into y-z plane
-//		double v[] = rollAxis;	// current direction vector
-//		double[] n = {1, 0, 0}; // normal to the y-z plane
-//		double[] u = new double[3];
-//		double dot = dot(v, n);
-//		for(int i = 0; i < 3; ++i){
-//			u[i] = v[i] - dot*n[i];
-//		}
-//		// find angle 
-//		double[] forward = {0, 0, -1};
-		double[] u = new double[]{0, rollAxis[1], rollAxis[2]};
-		double[] v = new double[]{0, 0, -1};
-		double angle = angleBetween(u, v);
-		// rotate 
-		gl.glRotated(angle, 1, 0, 0);
-		
-	}
 
 
 
-	/**
-	 * @return
-	 */
-	private double[] currentRotationMatrix() {
-		double[] a = rollAxis;
-		double[] b = new double[]{0, 0, -1};
-		double[] rotateAxis = cross(a, b);
-		rotateAxis = normalize(rotateAxis);
-		double degrees = Math.acos(dot(a,b)/(magnitude(a)*magnitude(b)));
-		double[][] rotation = rotate(degrees, rotateAxis);
-		double[] matrix = 
-		{
-			rotation[0][0], rotation[1][0], rotation[2][0], rotation[3][0],
-			rotation[0][1], rotation[1][1], rotation[2][1], rotation[3][1],	
-			rotation[0][2], rotation[1][2], rotation[2][2], rotation[3][2],	
-			rotation[0][3], rotation[1][3], rotation[2][3], rotation[3][3]
-		};
-		return matrix;
-	}
+
+
 	
-
 }

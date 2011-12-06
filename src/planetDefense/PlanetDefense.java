@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
 
 import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
@@ -40,6 +41,11 @@ import javax.swing.event.MouseInputAdapter;
 import jig.engine.ImageResource;
 import jig.engine.ResourceFactory;
 
+import planetDefense.geometry.Matrix;
+import planetDefense.geometry.Vector3d;
+import planetDefense.objects.EnemyShip;
+import planetDefense.objects.Asteroid;
+import planetDefense.objects.GameObject;
 import planetDefense.objects.UserShip;
 
 import com.jogamp.common.nio.Buffers;
@@ -63,12 +69,15 @@ public class PlanetDefense extends JFrame implements GLEventListener {
     private final float[] lightAmbient = {0.5f, 0.5f, 0.5f, 1.0f};
     private final float[] lightDiffuse = {1.0f, 1.0f, 1.0f, 1.0f};
     private final float[] lightSpecular = {1.0f, 1.0f, 1.0f, 1.0f};
-    private final float[] lightPosition = {1000.0f, 1000.0f, 0.0f, 0.0f};
+    private final float[] lightPosition = {1.0f, 1.0f, 0.0f, 0.0f};
 	private final double MAX_POSITION = 10000.0;
 	
     private GLU glu;
 	private UserShip user;
 	private Texture earth;
+	
+	private ArrayList<EnemyShip> enemies;
+	private ArrayList<Asteroid> asteroids;
 
     
 	public static void main (final String[] args){
@@ -98,6 +107,27 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 	}
 
 
+	/**
+		 * 
+		 */
+		private void positionCamera() {
+			Vector3d cameraPosition = user.getPosition();
+			Vector3d userDirection = user.getRollAxis();
+			Vector3d userUp = user.getYawAxis();
+			
+			cameraPosition = Vector3d.add(cameraPosition, Vector3d.scale(CAM_BEHIND_SCALAR, userDirection));
+			cameraPosition = Vector3d.add(cameraPosition, Vector3d.scale(CAM_ABOVE_SCALAR, userUp));
+	
+//			Vector3d userPosition = user.getPosition();
+//			glu.gluLookAt(cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ(), // camera position
+//					userPosition.getX(), userPosition.getY(), userPosition.getZ(), 	// look at position
+//					userUp.getX(), userUp.getY(), userUp.getZ());	// up direction
+			
+			glu.gluLookAt(0, 1, 503, // camera position
+					0, 0, 0, 	// look at position
+					0, 1, 0);	// up direction
+			
+		}
 	/* (non-Javadoc)
 	 * @see javax.media.opengl.GLEventListener#display(javax.media.opengl.GLAutoDrawable)
 	 */
@@ -119,6 +149,7 @@ public class PlanetDefense extends JFrame implements GLEventListener {
         //glu.gluQuadricDrawStyle(qobj0, GLU.GLU_FLAT); 
         glu.gluQuadricNormals( SOLID, GLU.GLU_SMOOTH );
 //                        gl.glColor4f(1, 0, 0, 1);
+        gl.glEnable(GL2.GL_LIGHTING);
         gl.glBegin(GL.GL_LINE_LOOP);
         gl.glVertex3f(0, 0, 0);
         gl.glVertex3f(400, 0, 0);
@@ -146,12 +177,18 @@ public class PlanetDefense extends JFrame implements GLEventListener {
         
         
         gl.glDisable(GL2.GL_LIGHTING);
+        gl.glColor3f(1, 1, 1);
         glu.gluSphere(SOLID, 100f, 50, 50);
         earth.disable(gl);
         glu.gluDeleteQuadric(SOLID);
         gl.glEnable(GL2.GL_LIGHTING);
         // draw user spaceship
+        gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0);
 		user.display(gl);
+		
+		for(EnemyShip ship : enemies){
+			ship.display(gl);
+		}
 			
 //                        gl.glTranslatef(FORWARD, LEFT, RIGHT); 
 //                        //glu.gluSphere(qobj0, 5, 100, 100);
@@ -198,32 +235,144 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 	/**
 	 * 
 	 */
-	private void positionCamera() {
-		double[] cameraPosition = user.getPosition().clone();
-		double[] userDirection = user.getRollAxis();
-		double[] userUp = user.getYawAxis();
-		for(int i = 0; i < 3; ++i){
-			cameraPosition[i] += CAM_BEHIND_SCALAR * -userDirection[i];
-			cameraPosition[i] += CAM_ABOVE_SCALAR * userUp[i];
-		}
-
-		double[] userPosition = user.getPosition();
-		glu.gluLookAt(cameraPosition[0], cameraPosition[1], cameraPosition[2], // camera position
-				userPosition[0], userPosition[1], userPosition[2], 	// look at position
-				userUp[0], userUp[1], userUp[2]);	// up direction
-//		glu.gluLookAt(300, 100, 200, // camera position
-//				300, 0, 0, 	// look at position
-//				0, 1, 0);	// up direction
+	private void update() {
+		user.update(0);
+		testUserCollisions();
+		testAsteroidCollisions();
+		testEnemyCollisions();
 		
 	}
 
 	/**
 	 * 
 	 */
-	private void update() {
-		user.update(0);
+	private void testEnemyCollisions() {
+		//for each enemy ship
+			// test bounding sphere collision between other asteroids
+			// if overlap
+				// check SAT
+			// test bounding sphere collision between other enemy ships
+			// if overlap
+				// check SAT
+			// test bounding sphere collision with home planet
+		
+
 		
 	}
+	/**
+	 * 
+	 */
+	private void testAsteroidCollisions() {
+		// TODO Auto-generated method stub
+		
+	}
+	/**
+	 * 
+	 */
+	private void testUserCollisions() {
+		user.projectVertices();
+		// for each enemy ship
+			// test bounding spheres
+			// if spheres collide
+				// test SAT
+
+
+		// test these projected vertices against all other objects
+		for(EnemyShip enemy : enemies){
+			enemy.projectVertices();
+			testCollision(user, enemy);
+		}
+		for(Asteroid asteroid : asteroids){
+			// test against asteroids
+		}
+		
+	}
+
+	/**
+	 * @param user2
+	 * @param enemy
+	 * @return
+	 */
+	private void testCollision(GameObject objectA, GameObject objectB) {
+		double minOverlap = 0;
+		boolean moveB = false;
+		Vector3d resolveVector = null;
+		Vector3d[] aNormals = objectA.getCurrentFaceNormals();
+		Vector3d[] bNormals = objectB.getCurrentFaceNormals();
+		Vector3d[] aVerts = objectA.getCurrentVertices();
+//		Vector3d[] bVerts = objectB.getCurrentVertices();
+		
+		double[] aMins = objectA.getMinProjectedVals();
+		double[] aMaxs = objectA.getMaxProjectedVals();
+		
+		double[] projectedVals = objectB.getProjectedValues(aNormals[0]);
+		double bMin = objectB.getMin(projectedVals);
+		double bMax = objectB.getMax(projectedVals);
+		double overlap = getOverlap(aMins[0], aMaxs[0], bMin, bMax);
+		if(overlap == 0){
+			return;
+		} else {
+			minOverlap = overlap;
+			resolveVector = aNormals[0];
+			moveB = true;
+		}
+		for(int i = 1; i < aNormals.length; ++i){
+			projectedVals = objectB.getProjectedValues(aNormals[i]);
+			bMin = objectB.getMin(projectedVals);
+			bMax = objectB.getMax(projectedVals);
+			overlap = getOverlap(aMins[i], aMaxs[i], bMin, bMax);
+			if(overlap == 0){
+				return;
+			} else if(overlap < minOverlap){
+				minOverlap = overlap;
+				resolveVector = aNormals[i];
+			}
+		}
+		
+		double[] bMins = objectB.getMinProjectedVals();
+		double[] bMaxs = objectB.getMaxProjectedVals();
+		for(int i = 0; i < bNormals.length; ++i){
+			projectedVals = objectA.getProjectedValues(bNormals[i]);
+			double aMin = objectA.getMin(projectedVals);
+			double aMax = objectA.getMax(projectedVals);
+			overlap = getOverlap(bMins[i], bMaxs[i], aMin, aMax);
+			if(overlap == 0){
+				return;
+			} else if(overlap < minOverlap){
+				minOverlap = overlap;
+				resolveVector = bNormals[i];
+				moveB = false;
+			}
+		}
+		if(moveB){
+			// move B by resolveVector
+
+		} else {
+			// move A by resolveVector
+		}
+	}
+	
+	
+	
+	/**
+	 * @param userMin
+	 * @param userMax
+	 * @param enemyMin
+	 * @param enemyMax
+	 * @return
+	 */
+	private double getOverlap(double minA, double maxA, double minB, double maxB) {
+		if(minA >= maxB || minB >= maxA){
+			return 0; // no overlap
+		} else {
+			if(minA <= minB){
+				return maxA-minB;
+			} else {
+				return maxB-minA;
+			}
+		}
+	}
+
 
 	public void displayChanged(final GLAutoDrawable glDrawable, final boolean modeChanged, final boolean deviceChanged){
 		glDrawable.getGL().getGL2().glViewport(0, 0, getWidth(), getHeight());
@@ -264,6 +413,12 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 		gl.glPointSize(1.0f);
 		gl.glLineWidth(1.0f);
 		user = new UserShip(gl);
+		enemies = new ArrayList<EnemyShip>();
+		enemies.add(new EnemyShip(gl));
+		asteroids = new ArrayList<Asteroid>();
+		
+		
+		
 		this.getContentPane().getComponent(0).addKeyListener(user);
 		this.getContentPane().getComponent(0).addMouseListener(user);
 		this.getContentPane().getComponent(0).requestFocus();
