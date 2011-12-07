@@ -23,6 +23,14 @@ public class Vector3d {
 	}
 	
 	
+	/**
+	 * @param force
+	 */
+	public Vector3d(Vector3d v) {
+		this(v.getX(), v.getY(), v.getZ());
+	}
+
+
 	public static double dot(Vector3d a, Vector3d b){
 		return a.x*b.x + a.y*b.y + a.z*b.z;
 	}
@@ -61,6 +69,11 @@ public class Vector3d {
 		b = Vector3d.normalize(b);
 		double dotProd = Vector3d.dot(a, b);
 		return Math.acos(dotProd)*(180/Math.PI);
+	}
+	
+	public static Vector3d mirror(Vector3d norm, Vector3d v){
+		Vector3d reflection = Vector3d.subtract(Vector3d.scale(2*Vector3d.dot(v, norm), norm), v);
+		return reflection;
 	}
 
 

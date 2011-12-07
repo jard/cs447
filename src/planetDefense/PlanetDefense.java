@@ -18,14 +18,17 @@ import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.Random;
 
 import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
@@ -35,6 +38,14 @@ import javax.media.opengl.GLEventListener;
 import javax.media.opengl.GLProfile;
 import javax.media.opengl.awt.GLCanvas;
 import javax.media.opengl.glu.*;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineListener;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import javax.swing.JFrame;
 import javax.swing.event.MouseInputAdapter;
 
@@ -46,21 +57,25 @@ import planetDefense.geometry.Vector3d;
 import planetDefense.objects.EnemyShip;
 import planetDefense.objects.Asteroid;
 import planetDefense.objects.GameObject;
+import planetDefense.objects.RayWeapon;
 import planetDefense.objects.UserShip;
 
 import com.jogamp.common.nio.Buffers;
 import com.jogamp.opengl.util.FPSAnimator;
 import com.jogamp.opengl.util.texture.Texture;
+import com.jogamp.opengl.util.texture.TextureData;
 import com.jogamp.opengl.util.texture.TextureIO;
 
 
 
-public class PlanetDefense extends JFrame implements GLEventListener {
+public class PlanetDefense extends JFrame implements GLEventListener, KeyListener, MouseListener{
 
 	private static final long serialVersionUID = 1L;
 	private static final double CAM_BEHIND_SCALAR = 3;
 	private static final double CAM_ABOVE_SCALAR = 1;
 	
+	private long gameClock;
+	private long lastFrame;
 	// FPSAnimator performs animation by repeatedly calling
 	// the display method
 	private FPSAnimator animator;
@@ -75,9 +90,26 @@ public class PlanetDefense extends JFrame implements GLEventListener {
     private GLU glu;
 	private UserShip user;
 	private Texture earth;
-	
+    private Texture asteroidTexture;
+    private Texture randomTexture;
+    private Texture starTexture;
+    private StarScape Starscape;
+    private StarScapeCube StarscapeCube;
+    
 	private ArrayList<EnemyShip> enemies;
 	private ArrayList<Asteroid> asteroids;
+	private GLProfile glp = GLProfile.getDefault();
+	private Clip clip2;
+	private Clip clip1;
+	private boolean button2clicked;
+	private ArrayList<RayWeapon> userWeapons;
+	private boolean gameOver;
+	private Random random;
+	private long spawnTimer;
+	private Clip shootClip;
+	private Clip damageClip;
+	private AudioInputStream damageAudio;
+	private AudioInputStream shootAudio;
 
     
 	public static void main (final String[] args){
@@ -118,14 +150,14 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 			cameraPosition = Vector3d.add(cameraPosition, Vector3d.scale(CAM_BEHIND_SCALAR, userDirection));
 			cameraPosition = Vector3d.add(cameraPosition, Vector3d.scale(CAM_ABOVE_SCALAR, userUp));
 	
-//			Vector3d userPosition = user.getPosition();
-//			glu.gluLookAt(cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ(), // camera position
-//					userPosition.getX(), userPosition.getY(), userPosition.getZ(), 	// look at position
-//					userUp.getX(), userUp.getY(), userUp.getZ());	// up direction
+			Vector3d userPosition = user.getPosition();
+			glu.gluLookAt(cameraPosition.getX(), cameraPosition.getY(), cameraPosition.getZ(), // camera position
+					userPosition.getX(), userPosition.getY(), userPosition.getZ(), 	// look at position
+					userUp.getX(), userUp.getY(), userUp.getZ());	// up direction
 			
-			glu.gluLookAt(0, 1, 503, // camera position
-					0, 0, 0, 	// look at position
-					0, 1, 0);	// up direction
+//			glu.gluLookAt(0, 1, 103, // camera position
+//					0, 0, 0, 	// look at position
+//					0, 1, 0);	// up direction
 			
 		}
 	/* (non-Javadoc)
@@ -133,116 +165,241 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 	 */
 	@Override
 	public void display(final GLAutoDrawable glDrawable) {
-		update();
 		final GL2 gl = glDrawable.getGL().getGL2();
 		gl.glClear(GL2.GL_COLOR_BUFFER_BIT | GL2.GL_DEPTH_BUFFER_BIT);
-		gl.glMatrixMode(GL2.GL_MODELVIEW);
-		gl.glLoadIdentity();
-		positionCamera();
-		gl.glPushMatrix();
 
-		// draw planet
-        GLUquadric SOLID = glu.gluNewQuadric();
-        GLUquadric stars = glu.gluNewQuadric();
-        glu.gluQuadricDrawStyle(stars, GLU.GLU_POINT);
-        glu.gluQuadricDrawStyle( SOLID, GLU.GLU_FILL);
-        //glu.gluQuadricDrawStyle(qobj0, GLU.GLU_FLAT); 
-        glu.gluQuadricNormals( SOLID, GLU.GLU_SMOOTH );
-//                        gl.glColor4f(1, 0, 0, 1);
-        gl.glEnable(GL2.GL_LIGHTING);
-        gl.glBegin(GL.GL_LINE_LOOP);
-        gl.glVertex3f(0, 0, 0);
-        gl.glVertex3f(400, 0, 0);
-        gl.glEnd();
-        gl.glBegin(GL.GL_LINE_LOOP);
-        gl.glVertex3f(0, 0, 0);
-        gl.glVertex3f(0, 400, 0);
-        gl.glEnd();
-        gl.glBegin(GL.GL_LINE_LOOP);
-        gl.glVertex3f(0, 0, 0);
-        gl.glVertex3f(0, 0, 400);
-        gl.glEnd();
-        glu.gluQuadricTexture(SOLID, true);
-        
-        earth.enable(gl);
-        earth.bind(gl);
-//        try {
-//          earth = TextureIO.newTexture(new File("resources/quom.png"), true);
-//          earth.enable(gl);
-//          earth.bind(gl);
-//        }
-//        catch (IOException e) {    
-//          javax.swing.JOptionPane.showMessageDialog(null, e);
-//        }
-        
-        
-        gl.glDisable(GL2.GL_LIGHTING);
-        gl.glColor3f(1, 1, 1);
-        glu.gluSphere(SOLID, 100f, 50, 50);
-        earth.disable(gl);
-        glu.gluDeleteQuadric(SOLID);
-        gl.glEnable(GL2.GL_LIGHTING);
-        // draw user spaceship
-        gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0);
-		user.display(gl);
-		
-		for(EnemyShip ship : enemies){
-			ship.display(gl);
-		}
-			
-//                        gl.glTranslatef(FORWARD, LEFT, RIGHT); 
-//                        //glu.gluSphere(qobj0, 5, 100, 100);
-//                        gl.glPushMatrix();
-//                        gl.glRotated(90, 1, 0, 0);
-//                        gl.glRotated(-90, 0, 1, 0);
-//                        gl.glPushMatrix();
-//                        gl.glTranslatef(0,0,8);
-//                        glu.gluCylinder(SOLID, 5, 5, 15, 10, 10);
-//                        gl.glTranslatef(0, 0, 15);
-//                        glu.gluDisk(SOLID, 0, 5, 10, 10);
-//                        gl.glPushMatrix();
-//                        //gl.glTranslatef(10,0,0);
-//                        gl.glBegin(GL.GL_TRIANGLES);        // Drawing Using Triangles
-//                        gl.glVertex3f(0.0f, -15.0f, 0.0f);
-//                        gl.glVertex3f(0.0f, 0.0f, -22.0f);
-//                        gl.glVertex3f(0.0f, 15.0f, 10.0f);
-//                        /*
-//                        gl.glVertex3f(-1.0f, -15.0f, 0.0f);
-//                        gl.glVertex3f(0.0f, 0.0f, -22.0f);
-//                        gl.glVertex3f(-1.0f, 15.0f, 0.0f);
-//                        
-//                        gl.glVertex3f(-1.0f, -15.0f, 0.0f);
-//                        gl.glVertex3f(0.0f, 0.0f, -22.0f);
-//                        gl.glVertex3f(1.0f, -15.0f, 0.0f);
-//                        
-//                        gl.glVertex3f(-1.0f, 15.0f, 0.0f);
-//                        gl.glVertex3f(0.0f, 0.0f, -22.0f);
-//                        gl.glVertex3f(1.0f, 15.0f, 0.0f);
-//                        */
-//                        
-//                        gl.glEnd();                         // Finished Drawing The Triangle
-//                        gl.glPopMatrix();
-//                        gl.glPopMatrix();
-//                        
-//                        glu.gluCylinder(SOLID, 0, 5, 8, 10, 10);
-//                        gl.glPopMatrix();
+			long currentTime = System.currentTimeMillis();
+			long delta = currentTime - lastFrame;
+			gameClock += delta;
+			lastFrame = currentTime;
+			update(delta);
 
-		gl.glPopMatrix();
-		glDrawable.swapBuffers();
+
+			gl.glMatrixMode(GL2.GL_MODELVIEW);
+			gl.glLoadIdentity();
+			positionCamera();
+			gl.glPushMatrix();
+	
+			// draw planet
+	        GLUquadric SOLID = glu.gluNewQuadric();
+	        glu.gluQuadricDrawStyle( SOLID, GLU.GLU_FILL);
+	        glu.gluQuadricNormals( SOLID, GLU.GLU_SMOOTH );
+	        gl.glEnable(GL2.GL_LIGHTING);
+	        glu.gluQuadricTexture(SOLID, true);
+	        
+	        earth.enable(gl);
+	        earth.bind(gl);
+	       
+	        
+	        gl.glDisable(GL2.GL_LIGHTING);
+	        gl.glColor3f(1, 1, 1);
+	        glu.gluSphere(SOLID, 50, 50, 50);
+	        earth.disable(gl);
+	        
+	        StarscapeCube.display(gl, SOLID, glu, starTexture);
+	        if(!gameOver){
+		        gl.glEnable(GL2.GL_LIGHTING);
+		        // draw user spaceship
+		        gl.glLightfv(GL2.GL_LIGHT0, GL2.GL_POSITION, lightPosition, 0);
+				user.display(gl);
+				// draw user rays	
+				for(RayWeapon rw : userWeapons){
+					rw.display(gl);
+				}
+				
+				for(EnemyShip ship : enemies){
+					ship.display(gl);
+				}
+				for(Asteroid asteroid : asteroids){
+					asteroid.display(gl);
+				}
+	        }
+				
+			gl.glPopMatrix();
+			glDrawable.swapBuffers();
+
 	}
 
 
 	/**
+	 * @param delta 
 	 * 
 	 */
-	private void update() {
-		user.update(0);
+	private void update(long delta) {
+		user.update(delta);
+		for(EnemyShip enemy : enemies){
+			enemy.update(delta);
+		}
+		for(Asteroid asteroid : asteroids){
+			asteroid.update(delta);
+		}
 		testUserCollisions();
+		testUserWeaponCollisions();
 		testAsteroidCollisions();
 		testEnemyCollisions();
+
+		StarscapeCube.updatePosition(user.getPosition());
+		for(RayWeapon rw : userWeapons){
+			rw.update(delta);
+		}
+		for(int i = 0; i < userWeapons.size(); ++i){
+			if(userWeapons.get(i).getDistance() > 1000){
+				userWeapons.remove(i);
+				--i;
+			}
+
+		}
+		for(int i = 0; i < enemies.size(); ++i){
+			if(enemies.get(i).exploded){
+				enemies.remove(i);
+				--i;
+			}
+
+		}
+		if(user.exploded){
+			gameOver = true;
+		}
+		spawnTimer += delta;
+		if(spawnTimer>1000){
+			spawnTimer = 0;
+			addEnemies();	
+		}
+		Vector3d userPosition = user.getPosition();
+		double dist = Vector3d.magnitude(userPosition);
+		if(dist<55){
+			Vector3d tangent = new Vector3d(userPosition.getX(), userPosition.getY(), userPosition.getZ());
+			double mag = Vector3d.magnitude(user.getVelocity());
+			Vector3d newV = Vector3d.mirror(Vector3d.normalize(tangent), user.getVelocity());
+//			newV = Vector3d.scale(mag, Vector3d.normalize(newV));
+			user.setPosition(Vector3d.add(userPosition, Vector3d.scale(-(55-dist), Vector3d.normalize(user.getVelocity()))));
+			user.setVelocity(Vector3d.scale(-1, newV));
+		}
+		
+		for(int i = 0; i < enemies.size(); ++i){
+			double enemyDist = Vector3d.magnitude(enemies.get(i).getPosition());
+			if(enemyDist < 50){
+				user.inflictDamage(enemies.get(i).getDamage());
+				enemies.get(i).explode();
+			}
+		}
 		
 	}
 
+	/**
+	 * 
+	 */
+	private void addEnemies() {
+		int r = random.nextInt((int) (gameClock+100000));
+		if(r < gameClock){
+			int x = random.nextInt(100);
+			int z = random.nextInt(100);
+			int y = 0;
+			Vector3d position = Vector3d.scale(100, Vector3d.normalize(new Vector3d(x, y, z)));
+//			Vector3d position = new Vector3d(1, 0, 100);
+			enemies.add(new EnemyShip(10, position));
+			x = random.nextInt(100);
+			y = random.nextInt(100);
+			z = random.nextInt(100);
+			position = Vector3d.scale(100, Vector3d.normalize(new Vector3d(x, y, z)));
+			asteroids.add(new Asteroid(20, position, asteroidTexture));
+		}
+		
+	}
+	/**
+	 * 
+	 */
+	private void gameOver() {
+		// TODO Auto-generated method stub
+		
+	}
+	/**
+	 * 
+	 */
+	private void testUserWeaponCollisions() {
+		for(int i = 0; i < userWeapons.size(); ++i){
+			for(EnemyShip enemy : enemies){
+				boolean collision = testWeaponCollision(userWeapons.get(i), enemy);
+				if(collision){
+					enemy.inflictDamage(userWeapons.get(i).getDamage());
+				}
+			}
+//			for(Asteroid asteroid : asteroids){
+//				
+//			}
+		}
+		
+	}
+	/**
+	 * @param weapon
+	 * @param enemy
+	 */
+	private boolean testWeaponCollision(RayWeapon weapon, GameObject object) {
+
+		Vector3d[] aNormals = object.getCurrentFaceNormals();
+//		Vector3d[] bVerts = objectB.getCurrentVertices();
+		
+		double[] mins = object.getMinProjectedVals();
+		double[] maxs = object.getMaxProjectedVals();
+		
+		for(int i = 0; i < aNormals.length; ++i){
+			double startProj = Vector3d.dot(weapon.start, aNormals[i]);
+			double wMin = startProj;
+			double wMax = startProj;
+			double endProj = Vector3d.dot(weapon.end, aNormals[i]);
+			if(endProj < wMin){
+				wMin = endProj;
+			}
+			if(endProj > wMax){
+				wMax = endProj;
+			}
+			double overlap = getOverlap(wMin, wMax, mins[i], maxs[i]);
+			if(overlap == 0){
+				return false;
+			}
+		}
+		return true;
+		
+//
+//		double wMin = objectB.getMin(projectedVals);
+//		double wMax = objectB.getMax(projectedVals);
+//		double overlap = getOverlap(aMins[0], aMaxs[0], bMin, bMax);
+//		if(overlap == 0){
+//			return;
+//		} else {
+//			minOverlap = overlap;
+//			resolveVector = aNormals[0];
+//			moveB = true;
+//		}
+//		for(int i = 1; i < aNormals.length; ++i){
+//			projectedVals = objectB.getProjectedValues(aNormals[i]);
+//			bMin = objectB.getMin(projectedVals);
+//			bMax = objectB.getMax(projectedVals);
+//			overlap = getOverlap(aMins[i], aMaxs[i], bMin, bMax);
+//			if(overlap == 0){
+//				return;
+//			} else if(overlap < minOverlap){
+//				minOverlap = overlap;
+//				resolveVector = aNormals[i];
+//			}
+//		}
+//		
+//		double[] bMins = objectB.getMinProjectedVals();
+//		double[] bMaxs = objectB.getMaxProjectedVals();
+//		for(int i = 0; i < bNormals.length; ++i){
+//			projectedVals = objectA.getProjectedValues(bNormals[i]);
+//			double aMin = objectA.getMin(projectedVals);
+//			double aMax = objectA.getMax(projectedVals);
+//			overlap = getOverlap(bMins[i], bMaxs[i], aMin, aMax);
+//			if(overlap == 0){
+//				return;
+//			} else if(overlap < minOverlap){
+//				minOverlap = overlap;
+//				resolveVector = bNormals[i];
+//				moveB = false;
+//			}
+//		}
+		
+	}
 	/**
 	 * 
 	 */
@@ -344,12 +501,25 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 				moveB = false;
 			}
 		}
+		// if execution reaches here, there is a collision
+		objectA.inflictDamage(objectB.getDamage());
+		objectB.inflictDamage(objectA.getDamage());
+        
+
+		// step 1: resolve penetration
 		if(moveB){
 			// move B by resolveVector
-
+			objectB.setPosition(Vector3d.add(objectB.getPosition(), Vector3d.scale(minOverlap, resolveVector)));
 		} else {
 			// move A by resolveVector
+			objectA.setPosition(Vector3d.add(objectA.getPosition(), Vector3d.scale(minOverlap, resolveVector)));
 		}
+		// step 2: calculate new velocities
+		// since ships have the same mass, they exchange velocities
+		Vector3d vA = objectA.getVelocity();
+		Vector3d vB = objectB.getVelocity();
+		objectA.setVelocity(vB);
+		objectB.setVelocity(vA);
 	}
 	
 	
@@ -395,8 +565,9 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 	 */
 	@Override
 	public void init(final GLAutoDrawable glDrawable) {
+		random = new Random();
 		glu = new GLU();
-                
+        spawnTimer = 0;  
 		final GL2 gl = glDrawable.getGL().getGL2();
 		gl.glShadeModel(GL2.GL_FLAT);
 		gl.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -412,26 +583,100 @@ public class PlanetDefense extends JFrame implements GLEventListener {
                 
 		gl.glPointSize(1.0f);
 		gl.glLineWidth(1.0f);
-		user = new UserShip(gl);
+
+		Matrix I = new Matrix(3, 3);
+		I.set(0,0, .15*.15+1.2*1.2);
+		I.set(0,1, 0);
+		I.set(0,2, 0);
+		
+		I.set(1,0, 0);
+		I.set(1,1, .8*.8+1.2*1.2);
+		I.set(1,2, 0);
+		
+		I.set(2,0, 0);
+		I.set(2,1, 0);
+		I.set(2,2, .8*.8+.15*.15);
+		user = new UserShip(10);
+		
+		
+		Starscape = new StarScape(gl);
+		StarscapeCube = new StarScapeCube(gl);
+		
 		enemies = new ArrayList<EnemyShip>();
-		enemies.add(new EnemyShip(gl));
+		enemies.add(new EnemyShip(10, new Vector3d(1,0,100)));
 		asteroids = new ArrayList<Asteroid>();
 		
+		userWeapons = new ArrayList<RayWeapon>();
 		
 		
-		this.getContentPane().getComponent(0).addKeyListener(user);
-		this.getContentPane().getComponent(0).addMouseListener(user);
+		this.getContentPane().getComponent(0).addKeyListener(this);
+		this.getContentPane().getComponent(0).addMouseListener(this);
 		this.getContentPane().getComponent(0).requestFocus();
 		
         try {
-//        	ImageResource imgRes= ResourceFactory.getFactory().getFrames("resources/quom.png").get(0);
-//        	URL url = getClass().getResource("resources/quom.png");
-//        	System.out.println(url.getPath());
-            earth = TextureIO.newTexture(new File("resources/quom.png"), false);
-          }
-          catch (IOException e) {    
+//            earth = TextureIO.newTexture(new File("resources/quom.png"), false);
+
+	        InputStream stream = getClass().getResourceAsStream("planet2.jpg");
+	        TextureData data = TextureIO.newTextureData(glp, stream, false, "jpg");
+	        earth = TextureIO.newTexture(data);
+	        stream = getClass().getResourceAsStream("asteroid1.jpg");
+	        data = TextureIO.newTextureData(glp, stream, false, "jpg");
+	        asteroidTexture = TextureIO.newTexture(data);
+	        stream = getClass().getResourceAsStream("klendathu.png");
+	        data = TextureIO.newTextureData(glp, stream, false, "png");
+	        randomTexture = TextureIO.newTexture(data);
+	        stream = getClass().getResourceAsStream("starscape2.jpg");
+//	        stream = getClass().getResourceAsStream("starfield.jpg");
+	        data = TextureIO.newTextureData(glp, stream, false, "jpg");
+	        starTexture = TextureIO.newTexture(data);
+        } catch (IOException e) {    
             javax.swing.JOptionPane.showMessageDialog(null, e);
-          }
+        }
+        
+//        try{
+//            InputStream shootStream = getClass().getResourceAsStream("shoot.wav");
+//            shootAudio = AudioSystem.getAudioInputStream(shootStream);
+//            
+//            
+//            InputStream damageStream = getClass().getResourceAsStream("enemyDamage.wav");
+//            damageAudio = AudioSystem.getAudioInputStream(damageStream);
+//            DataLine.Info damageInfo = new DataLine.Info(Clip.class, damageAudio.getFormat());
+//            damageClip = (Clip) AudioSystem.getLine(damageInfo);
+//            damageClip.open(damageAudio);
+//            damageClip.addLineListener(new LineListener() {
+//                public void update(LineEvent event) {
+//                  if (event.getType() == LineEvent.Type.STOP) {
+//                    event.getLine().close();
+//                    System.exit(0);
+//                  }
+//                }
+//              });
+        	
+        	
+        	
+//            InputStream stream1 = getClass().getResourceAsStream("ambient1.wav");
+//            AudioInputStream audio1 = AudioSystem.getAudioInputStream(stream1);
+//            DataLine.Info info = new DataLine.Info(Clip.class, damageAudio.getFormat());
+//            clip1 = (Clip) AudioSystem.getLine(info);
+//            clip1.open(audio1);
+//            clip1.loop(Clip.LOOP_CONTINUOUSLY);
+//            clip1.start();
+//            stream1 = getClass().getResourceAsStream("laserCannon.wav");
+//            AudioInputStream audio2 = AudioSystem.getAudioInputStream(stream1);
+//            clip2 = AudioSystem.getClip();
+//            clip2.open(audio2);
+            //
+            //Do clip2.start(); when ever you fire a missile
+            //
+            //
+            
+//        } catch(IOException e){
+//           System.out.println(e); 
+//        } catch(UnsupportedAudioFileException uae){
+//            System.out.println(uae);
+//        } catch(LineUnavailableException lae){
+//            System.out.println(lae);
+//        }
 	}
 
 //
@@ -519,9 +764,97 @@ public class PlanetDefense extends JFrame implements GLEventListener {
 		animator = new FPSAnimator(30);
 		animator.add(glcanvas);
 		setVisible(true);
+		gameClock = 0;
+		lastFrame = System.currentTimeMillis();
 		animator.start();
 	}
 
 
+	/* (non-Javadoc)
+	 * @see java.awt.event.KeyListener#keyPressed(java.awt.event.KeyEvent)
+	 */
+	@Override
+	public void keyPressed(KeyEvent e) {
+		if(e.getKeyCode() == KeyEvent.VK_N){
+			user.toggleNorms();
+		}
+		user.updateKeyPressed(e.getKeyCode(), true);
+	}
+
+	/* (non-Javadoc)
+	 * @see java.awt.event.KeyListener#keyReleased(java.awt.event.KeyEvent)
+	 */
+	@Override
+	public void keyReleased(KeyEvent e) {
+		user.updateKeyPressed(e.getKeyCode(), false);		
+	}
+
+	/* (non-Javadoc)
+	 * @see java.awt.event.MouseListener#mouseClicked(java.awt.event.MouseEvent)
+	 */
+	@Override
+	public void mouseClicked(MouseEvent e) {
+	}
+
+	/* (non-Javadoc)
+	 * @see java.awt.event.KeyListener#keyTyped(java.awt.event.KeyEvent)
+	 */
+	@Override
+	public void keyTyped(KeyEvent e) {
+		// TODO Auto-generated method stub
+		
+	}
+	/* (non-Javadoc)
+	 * @see java.awt.event.MouseListener#mouseEntered(java.awt.event.MouseEvent)
+	 */
+	@Override
+	public void mouseEntered(MouseEvent e) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	/* (non-Javadoc)
+	 * @see java.awt.event.MouseListener#mouseExited(java.awt.event.MouseEvent)
+	 */
+	@Override
+	public void mouseExited(MouseEvent e) {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	/* (non-Javadoc)
+	 * @see java.awt.event.MouseListener#mousePressed(java.awt.event.MouseEvent)
+	 */
+	@Override
+	public void mousePressed(MouseEvent e) {
+		int button = e.getButton();
+		if(button == MouseEvent.BUTTON1){
+			user.thrust(true);
+		} else if(!button2clicked){
+			button2clicked = true;
+			fireUserWeapon();
+		}
+	}
+
+
+	/**
+	 * 
+	 */
+	private void fireUserWeapon() {
+		RayWeapon weapon = new RayWeapon(user.getPosition(), Vector3d.scale(-1, user.getRollAxis()));
+		userWeapons.add(weapon);
+		
+	}
+	/* (non-Javadoc)
+	 * @see java.awt.event.MouseListener#mouseReleased(java.awt.event.MouseEvent)
+	 */
+	@Override
+	public void mouseReleased(MouseEvent e) {
+		if(e.getButton() == MouseEvent.BUTTON1){
+			user.thrust(false);
+		} else {
+			button2clicked = false;
+		}
+	}
 
 }
