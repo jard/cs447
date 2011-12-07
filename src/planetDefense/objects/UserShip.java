@@ -15,6 +15,7 @@ import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
 
 import com.jogamp.common.nio.Buffers;
+import com.jogamp.opengl.util.gl2.GLUT;
 
 import planetDefense.geometry.Matrix;
 import planetDefense.geometry.Quaternion;
@@ -51,6 +52,7 @@ public class UserShip extends GameObject{
 	private boolean firing;
 	private boolean stopKeyPressed;
 	private boolean showNorms;
+	public long score;
 
 	
 	
@@ -163,8 +165,14 @@ public class UserShip extends GameObject{
 	
 	//		gl.glTranslated(position.getX(), position.getY(), position.getZ());
 			gl.glMultMatrixd(getCurrentTransformationMatrix(), 0);
-	//		gl.glScaled(2.0, 2.0, 2.0);
 			
+			GLUT glut = new GLUT();
+			gl.glColor3d(1.0, 0, 0);
+			gl.glDisable(GL2.GL_LIGHTING);
+			gl.glRasterPos3d(1.5, 1.1, 0);
+			glut.glutBitmapString(GLUT.BITMAP_TIMES_ROMAN_24, "SCORE: " + score);
+	//		gl.glScaled(2.0, 2.0, 2.0);
+			gl.glEnable(GL2.GL_LIGHTING);
 			gl.glBegin(GL2.GL_TRIANGLE_FAN);
 			int a,b,c;
 			a = 0;

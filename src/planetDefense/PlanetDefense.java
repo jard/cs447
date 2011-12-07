@@ -73,6 +73,7 @@ public class PlanetDefense extends JFrame implements GLEventListener, KeyListene
 	private static final long serialVersionUID = 1L;
 	private static final double CAM_BEHIND_SCALAR = 3;
 	private static final double CAM_ABOVE_SCALAR = 1;
+	public static String score;
 	
 	private long gameClock;
 	private long lastFrame;
@@ -226,6 +227,7 @@ public class PlanetDefense extends JFrame implements GLEventListener, KeyListene
 	 * 
 	 */
 	private void update(long delta) {
+		user.score += 1;
 		user.update(delta);
 		for(EnemyShip enemy : enemies){
 			enemy.update(delta);
@@ -633,7 +635,7 @@ public class PlanetDefense extends JFrame implements GLEventListener, KeyListene
             javax.swing.JOptionPane.showMessageDialog(null, e);
         }
         
-//        try{
+        try{
 //            InputStream shootStream = getClass().getResourceAsStream("shoot.wav");
 //            shootAudio = AudioSystem.getAudioInputStream(shootStream);
 //            
@@ -654,12 +656,13 @@ public class PlanetDefense extends JFrame implements GLEventListener, KeyListene
         	
         	
         	
-//            InputStream stream1 = getClass().getResourceAsStream("ambient1.wav");
-//            AudioInputStream audio1 = AudioSystem.getAudioInputStream(stream1);
+            InputStream stream1 = getClass().getResourceAsStream("ambient1.wav");
+            AudioInputStream audio1 = AudioSystem.getAudioInputStream(stream1);
 //            DataLine.Info info = new DataLine.Info(Clip.class, damageAudio.getFormat());
 //            clip1 = (Clip) AudioSystem.getLine(info);
-//            clip1.open(audio1);
-//            clip1.loop(Clip.LOOP_CONTINUOUSLY);
+            clip1 = AudioSystem.getClip();
+            clip1.open(audio1);
+            clip1.loop(1000);
 //            clip1.start();
 //            stream1 = getClass().getResourceAsStream("laserCannon.wav");
 //            AudioInputStream audio2 = AudioSystem.getAudioInputStream(stream1);
@@ -670,13 +673,13 @@ public class PlanetDefense extends JFrame implements GLEventListener, KeyListene
             //
             //
             
-//        } catch(IOException e){
-//           System.out.println(e); 
-//        } catch(UnsupportedAudioFileException uae){
-//            System.out.println(uae);
-//        } catch(LineUnavailableException lae){
-//            System.out.println(lae);
-//        }
+        } catch(IOException e){
+           System.out.println(e); 
+        } catch(UnsupportedAudioFileException uae){
+            System.out.println(uae);
+        } catch(LineUnavailableException lae){
+            System.out.println(lae);
+        }
 	}
 
 //
